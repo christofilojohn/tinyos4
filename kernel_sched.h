@@ -100,9 +100,10 @@ enum SCHED_CAUSE {
 typedef struct thread_control_block {
 
 	PCB* owner_pcb; /**< @brief This is null for a free TCB */
-
+  int priority; // process priority
 	cpu_context_t context; /**< @brief The thread context */
-	Thread_type type; /**< @brief The type of thread */
+  PTCB* ptcb;
+  Thread_type type; /**< @brief The type of thread */
 	Thread_state state; /**< @brief The state of the thread */
 	Thread_phase phase; /**< @brief The phase of the thread */
 
@@ -129,6 +130,33 @@ typedef struct thread_control_block {
 #endif
 
 } TCB;
+
+
+typedef struct process_thread_control_block {
+	TCB* tcb;         // the "actual" thread that will run the task
+
+  Task task;        // the task that will be run  
+  int argl;         // the size of the task's argument list
+  void* args;       // the argument list of the task
+
+  int exitval;      // where the task's return value will be stored after
+                    // it exits. This is needed so that threads depending 
+                    // on this one can get what they need without the thread
+                    // actually occupying any space in scheduler queues
+
+  int exited;       // flag that signifies whether the thread has exited [0, 1]
+  int detached;     // flag that signifies whether the thread is detached
+                    // (i.e. cannot be joined)
+
+  CondVar exit_cv;  // condition variable that threads that join this one wait on
+
+  int refcount;     // number of threads waiting for this one, aka the
+                    // length of exit_cv->waitset
+
+  rlnode ptcb_list_node;    // self-pointing rlnode to allow seamless connections to 
+                            // lists
+} PTCB;
+
 
 /** @brief Thread stack size.
 
