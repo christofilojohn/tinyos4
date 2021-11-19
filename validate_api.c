@@ -986,7 +986,7 @@ BOOT_TEST(test_threadself,
 
 BOOT_TEST(test_join_illegal_tid_gives_error,
 	"Test that ThreadJoin rejects an illegal Tid")
-{
+{	
 	int* illegal_ptr = (int*) -1;
 
 	ASSERT(ThreadJoin(NOTHREAD, illegal_ptr)==-1);

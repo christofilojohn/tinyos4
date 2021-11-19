@@ -103,7 +103,7 @@ int sys_ThreadJoin(Tid_t tid, int* exitval)
 {
   
   // check if the given tid is 0 or the same as the current one
-  if(tid==0 || tid==ThreadSelf()){
+  if(tid<=0 || tid==sys_ThreadSelf()){
     return -1;
   }
 
@@ -111,20 +111,15 @@ int sys_ThreadJoin(Tid_t tid, int* exitval)
   PCB* curproc = CURPROC;  
   TCB* curthread  = cur_thread();
   rlnode* tmp = rlist_find(&curproc->ptcb_list, (PTCB*)tid, NULL);   // could also be a check like tid->owner_pcb!=CURPROC and probably should be, since we do not know for sure that tid is the PTCB's "key" that rlist_find uses to search
-  PTCB* thread_to_join = tmp->ptcb;
   
   // if the search was unsuccessful, exit
-  if(thread_to_join == NULL){   
+  if(tmp == NULL){   
     return -1;
-  }
+  }  
+  PTCB* thread_to_join = tmp->ptcb;
 
   // check if joining the given thread is allowed
-  if(thread_to_join->exited==1 || thread_to_join->detached==1){
-    return -1;
-  }
-
-  // redundant, paranoid check
-  if(thread_to_join->tcb->state != RUNNING){
+  if(thread_to_join->detached==1){
     return -1;
   }
 
@@ -138,8 +133,13 @@ int sys_ThreadJoin(Tid_t tid, int* exitval)
   thread_to_join->refcount++;
 
   // wait on the CondVar
-  while(thread_to_join->exited==0 && thread_to_join->detached==0){
+  while(thread_to_join->exited==0){
     kernel_wait(&curthread->ptcb->exit_cv, SCHED_USER);
+    
+    if(thread_to_join->detached==1){
+      return -1;
+    }
+
   }
 
   // save the exit value
@@ -167,12 +167,17 @@ int sys_ThreadJoin(Tid_t tid, int* exitval)
 int sys_ThreadDetach(Tid_t tid)
 {
   PTCB* ptcb = (PTCB*) tid;
-	if (ptcb->tcb->state == EXITED || ptcb->tcb == NOTHREAD || ptcb->tcb->owner_pcb!=CURPROC)
+  if (ptcb == NULL)
+  {
+    return -1;
+  }
+	if (rlist_find(& CURPROC->ptcb_list, ptcb, NULL)==NULL)
   {
     return -1;
   }
 
   ptcb->detached = 1;
+  ptcb->refcount = 0;
   kernel_broadcast(&ptcb->exit_cv);
   return 0;
 
@@ -183,7 +188,7 @@ int sys_ThreadDetach(Tid_t tid)
   */
 void sys_ThreadExit(int exitval){
 
-  
+ 
   PCB* curproc = CURPROC;                 // get current PCB
   PTCB* curptcb = cur_thread()->ptcb;     // get current PTCB
   curproc->thread_count--;
@@ -236,7 +241,7 @@ void sys_ThreadExit(int exitval){
       }
     }
       
-    if(curptcb->refcount == 0){
+    if(curptcb->refcount == 0 || curptcb->detached == 1){
       rlist_remove(&curptcb->ptcb_list_node);  // remove the PTCB from the PCB's list
       free(curptcb);                          // free the PTCB
     }

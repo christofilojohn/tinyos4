@@ -200,7 +200,7 @@ Pid_t sys_Exec(Task call, int argl, void* args)
   */
 
   if(call != NULL) {
-    PTCB* newPTCB = xmalloc(sizeof(PTCB));
+    PTCB* newPTCB = (PTCB*) xmalloc(sizeof(PTCB));
     newproc->main_thread = spawn_thread(newproc, start_main_thread);
     //additions
 
