@@ -1205,6 +1205,8 @@ BOOT_TEST(test_detach_main_thread,
 {
 	ASSERT(run_get_status(detach_main_thread, 0, NULL) == 42);
 	return 0;
+
+	
 }
 
 

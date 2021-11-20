@@ -135,7 +135,7 @@ static int cv_wait(Mutex* mutex, CondVar* cv,
 
 	/* Now atomically release mutex and sleep */
 	Mutex_Unlock(mutex);
-	sleep_releasing(STOPPED, &(cv->waitset_lock), cause, timeout);
+	sleep_releasing(STOPPED, &(cv->waitset_lock), cause, timeout);		// Its TCB should not be accessed in any way after this call
 
 	/* Woke up, we must check wether we were signaled, and tidy up */
 	Mutex_Lock(&(cv->waitset_lock));

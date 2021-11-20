@@ -134,9 +134,9 @@ int sys_ThreadJoin(Tid_t tid, int* exitval)
 
   // wait on the CondVar
   while(thread_to_join->exited==0){
-    kernel_wait(&curthread->ptcb->exit_cv, SCHED_USER);
+    kernel_wait(&thread_to_join->exit_cv, SCHED_USER);
     
-    if(thread_to_join->detached==1){
+    if(thread_to_join->detached==1){ // could the following code be in the while loop
       return -1;
     }
 
@@ -147,7 +147,7 @@ int sys_ThreadJoin(Tid_t tid, int* exitval)
     *exitval = thread_to_join->exitval;
   }
 
-  // decrement the refcount
+  // decrement the refcount 
   thread_to_join->refcount--;
 
   // destroy the ptcb once refcount reaches 0
@@ -167,15 +167,14 @@ int sys_ThreadJoin(Tid_t tid, int* exitval)
 int sys_ThreadDetach(Tid_t tid)
 {
   PTCB* ptcb = (PTCB*) tid;
-  if (ptcb == NULL)
+  if (ptcb == NULL)     // check if ptcb is null
   {
     return -1;
   }
-	if (rlist_find(& CURPROC->ptcb_list, ptcb, NULL)==NULL)
+	if (rlist_find(& CURPROC->ptcb_list, ptcb, NULL)==NULL)   // check if ptcb if owned by curproc
   {
     return -1;
   }
-
   ptcb->detached = 1;
   ptcb->refcount = 0;
   kernel_broadcast(&ptcb->exit_cv);
