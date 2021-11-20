@@ -303,6 +303,7 @@ static void sched_make_ready(TCB* tcb)
 
 	/* Mark as ready */
 	tcb->state = READY;
+	//fprintf(stderr, "tcb->priority is %d\n", tcb->priority);
 
 	/* Possibly add to the scheduler queue */
 	if (tcb->phase == CTX_CLEAN)
@@ -465,7 +466,7 @@ void yield(enum SCHED_CAUSE cause)
 			break;
 		// 
 		case SCHED_IO:
-			if(current->priority >= 0)
+			if(current->priority > 0)
 				current->priority--; // increase priority
 			break;
 		//
@@ -507,7 +508,7 @@ void yield(enum SCHED_CAUSE cause)
 			if(!(is_rlist_empty(&SCHED[i]))){
 				temp_node = rlist_pop_back(&SCHED[i]);
 				rlist_push_back(&SCHED[i-1], temp_node);
-				if(temp_node->tcb->priority >=0)
+				if(temp_node->tcb->priority >0)
 					temp_node->tcb->priority--;
 			}
 		}
