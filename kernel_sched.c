@@ -164,13 +164,16 @@ TCB* spawn_thread(PCB* pcb, void (*func)())
 	tcb->phase = CTX_CLEAN;
 	tcb->thread_func = func;
 	tcb->wakeup_time = NO_TIMEOUT;
+	
 	rlnode_init(&tcb->sched_node, tcb); /* Intrusive list node */
 
 	tcb->its = QUANTUM;
 	tcb->rts = QUANTUM;
 	tcb->last_cause = SCHED_IDLE;
 	tcb->curr_cause = SCHED_IDLE;
-
+	// initialise the priority integer
+	tcb->priority = 0;
+	
 	/* Compute the stack segment address and size */
 	void* sp = ((void*)tcb) + THREAD_TCB_SIZE;
 
@@ -225,7 +228,8 @@ void release_TCB(TCB* tcb)
   Both of these structures are protected by @c sched_spinlock.
 */
 
-rlnode SCHED; /* The scheduler queue */
+//rlnode SCHED; /* Old implementation */
+rlnode SCHED[PRIORITY_QUEUES]; /* The scheduler array of multiple priority level queues  */
 rlnode TIMEOUT_LIST; /* The list of threads with a timeout */
 Mutex sched_spinlock = MUTEX_INIT; /* spinlock for scheduler queue */
 
@@ -267,8 +271,14 @@ static void sched_register_timeout(TCB* tcb, TimerDuration timeout)
 */
 static void sched_queue_add(TCB* tcb)
 {
-	/* Insert at the end of the scheduling list */
-	rlist_push_back(&SCHED, &tcb->sched_node);
+	assert(tcb->type!=IDLE_THREAD);
+	
+	
+	assert(tcb->priority<PRIORITY_QUEUES);
+	assert(tcb ->priority>=0);
+	//rlist_push_back(&SCHED, &tcb->sched_node);
+	/* Insert at the end of the corresponding que */
+	rlist_push_back(&SCHED[tcb->priority], &tcb->sched_node);
 
 	/* Restart possibly halted cores */
 	cpu_core_restart_one();
@@ -327,9 +337,23 @@ static void sched_wakeup_expired_timeouts()
 static TCB* sched_queue_select(TCB* current)
 {
 	/* Get the head of the SCHED list */
-	rlnode* sel = rlist_pop_front(&SCHED);
+	// rlnode* sel = rlist_pop_front(&SCHED); old implementation
+	rlnode* sel = NULL;
+	TCB* next_thread = NULL;
+	// for each priority level
+	for(int i=0; i<PRIORITY_QUEUES; i++){
+		sel = rlist_pop_front(&SCHED[i]);
+		// if the tcb is not null the head has been found
+		if(sel->tcb != NULL)
+			break;
+	}
 
-	TCB* next_thread = sel->tcb; /* When the list is empty, this is NULL */
+	//TCB* next_thread = sel->tcb; /* When the list is empty, this is NULL */
+	if(sel==NULL){
+		next_thread = NULL;
+	}else{
+		next_thread = sel->tcb;
+	}
 
 	if (next_thread == NULL)
 		next_thread = (current->state == READY) ? current : &CURCORE.idle_thread;
@@ -402,7 +426,7 @@ void sleep_releasing(Thread_state state, Mutex* mx, enum SCHED_CAUSE cause,
 }
 
 /* This function is the entry point to the scheduler's context switching */
-
+int yield_counter = 0;
 void yield(enum SCHED_CAUSE cause)
 {
 	/* Reset the timer, so that we are not interrupted by ALARM */
@@ -424,6 +448,35 @@ void yield(enum SCHED_CAUSE cause)
 	current->last_cause = current->curr_cause;
 	current->curr_cause = cause;
 
+	
+	// temp node that will be moved upwards
+	rlnode* temp_node = NULL; 
+
+
+ 
+
+
+	switch (cause) {
+		// max priority is 0 min is RIORITY_QUEUES-1 = 4
+		// 
+		case SCHED_QUANTUM:
+			if(current->priority < PRIORITY_QUEUES-1)
+				current->priority ++; // decrease priority
+			break;
+		// 
+		case SCHED_IO:
+			if(current->priority >= 0)
+				current->priority--; // increase priority
+			break;
+		//
+		case SCHED_MUTEX:
+			if (current->last_cause == SCHED_MUTEX && current->curr_cause == SCHED_MUTEX && current->priority < PRIORITY_QUEUES-1) {
+				current->priority ++; // decrease priority
+			}
+			break;	
+		default:
+			break;
+	}
 	/* Wake up threads whose sleep timeout has expired */
 	sched_wakeup_expired_timeouts();
 
@@ -442,6 +495,25 @@ void yield(enum SCHED_CAUSE cause)
 		cpu_swap_context(&current->context, &next->context);
 	}
 
+
+	// Moving the nodes to the highest priority 
+	yield_counter ++;
+	
+	 if (yield_counter >= MAX_YIELDS){
+		// if the counter has reached the max, re-initialize it
+		
+
+		for(int i = 1; i< PRIORITY_QUEUES; i++){	
+			if(!(is_rlist_empty(&SCHED[i]))){
+				temp_node = rlist_pop_back(&SCHED[i]);
+				rlist_push_back(&SCHED[i-1], temp_node);
+				if(temp_node->tcb->priority >=0)
+					temp_node->tcb->priority--;
+			}
+		}
+		yield_counter = 0;
+	}
+	
 	/* This is where we get after we are switched back on! A long time
 	   may have passed. Start a new timeslice...
 	  */
@@ -521,7 +593,13 @@ static void idle_thread()
  */
 void initialize_scheduler()
 {
-	rlnode_init(&SCHED, NULL);
+	//rlnode_init(&SCHED, NULL); old implementation
+	int i=0;
+	// for each priority que, initialize
+	for(int temp=0; temp < PRIORITY_QUEUES; temp++){
+		rlnode_init(&SCHED[temp], NULL);
+	}
+
 	rlnode_init(&TIMEOUT_LIST, NULL);
 }
 
