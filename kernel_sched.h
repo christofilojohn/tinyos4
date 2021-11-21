@@ -192,7 +192,7 @@ extern CCB cctx[MAX_CORES];
 */
 TCB* cur_thread();
 
-#define MAX_YIELDS 225
+#define MAX_YIELDS 300
 #define PRIORITY_QUEUES 5
 /** 
   @brief The current process.
