@@ -69,31 +69,31 @@ int FCB_reserve(size_t num, Fid_t *fid, FCB** fcb)
     uint i;
 
     /* Find distinct fids */
-    for(i=0; i<num; i++) {
-	while(f<MAX_FILEID && cur->FIDT[f]!=NULL)
-	    f++;
-	if(f==MAX_FILEID) break;
-	fid[i] = f; f++;
+    for(i=0; i<num; i++) {                        // n times
+      while(f<MAX_FILEID && cur->FIDT[f]!=NULL)   // find a null FCB in the process's FIDT
+          f++;
+      if(f==MAX_FILEID) break;
+      fid[i] = f; f++;                            // save the fid in the fid array and continue, unless its the last one
     }
-    if(i<num) return 0;
+    if(i<num) return 0;                           // fail if not all requested fids were allocated
     /* Allocate FCBs */
-    for(i=0;i<num;i++)
-	if((fcb[i] = acquire_FCB()) == NULL)
-	    break;
-    if(i<num) {
-	/* Roll back */
-	while(i>0) {
-	    release_FCB(fcb[i-1]);
-	    i--;
-	}
-	return 0;
-    }
-    /* Found all */
-    for(i=0;i<num;i++) {
-	cur->FIDT[fid[i]]=fcb[i];
-	FCB_incref(fcb[i]);
-    }
-    return 1;
+      for(i=0;i<num;i++)                          // n times
+	      if((fcb[i] = acquire_FCB()) == NULL)      // acquire FCB for the fid
+	        break;
+      if(i<num) {                                 // if not all requested fids were acquired, go back to the start of the FIDT and release the ones you acquired, then fail
+	    /* Roll back */
+	      while(i>0) {
+	        release_FCB(fcb[i-1]);
+	        i--;
+	      }
+	      return 0;                       
+      }
+      /* Found all */
+      for(i=0;i<num;i++) {                        // n times
+	      cur->FIDT[fid[i]]=fcb[i];                 // set the curproc's FIDT[i] to the correspondent FCB
+	      FCB_incref(fcb[i]);                       // increase the FCB's refcount
+      }
+      return 1;
 }
 
 
