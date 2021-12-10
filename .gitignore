@@ -9,3 +9,4 @@ tinyos_shell
 validate_api
 test_example
 doc/
+.vscode/

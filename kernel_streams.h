@@ -3,6 +3,46 @@
 
 #include "tinyos.h"
 #include "kernel_dev.h"
+#define PIPE_BUFFER_SIZE 8192		// between 4 and 16 kB, according to Pipe() syscall's documentation */
+
+/**
+    Node of a doubly linked character list.
+*/
+typedef struct char_list_node {
+    struct char_list_node *prev;
+    struct char_list_node *next;
+    char c;
+} c_node;
+c_node* init_list(int size, const char *data);
+
+typedef struct pipe_control_block {
+	FCB *reader, *writer;
+	CondVar has_space;    				/* For blocking writer if no space is available */
+	CondVar has_data;     				/* For blocking reader until data are available */
+	c_node* w_position, *r_position;  	/* write, read position in buffer (pointers to c_nodes) */
+	c_node* BUFFER;  	/* bounded (cyclic) byte buffer */
+	int written_bytes;	/* need to create mutex ?*/
+} pipe_cb;
+
+static file_ops reader_file_ops = {
+	.Read = pipe_read,
+	.Write = no_op_func,
+	.Close = pipe_reader_close
+};
+
+static file_ops writer_file_ops = {
+	.Read = no_op_func,
+	.Write = pipe_write,
+	.Close = pipe_writer_close
+};
+
+
+int sys_Pipe(pipe_t* pipe);
+int pipe_write(void* pipecb_t, const char *buf, unsigned int n);
+int pipe_read(void* pipecb_t, char *buf, unsigned int n);
+int pipe_writer_close(void* _pipecb);
+int pipe_reader_close(void* _pipecb);
+int no_op_func();
 
 /**
 	@file kernel_streams.h
