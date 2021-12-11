@@ -112,14 +112,14 @@ int sys_Pipe(pipe_t* pipe){
     }
 
     // create the pipe object
-    pipe_cb *pipe_obj;
-    if(pipe_obj = init_pipe_obj() == NULL){
+    pipe_cb *pipe_obj = init_pipe_obj();
+    if(pipe_obj  == NULL){
         return -1;                      // fail if pipe initialization fails
     }
 
     // fid[0] is the read end, fid[1] is the write end
     pipe->read = fids[0];
-    pipe->read = fids[1];
+    pipe->write = fids[1];
 
     // setup the reader (fcbs[0] is the FCB at which fids[0] is pointing)
     fcbs[0]->streamfunc = &reader_file_ops;
@@ -162,8 +162,8 @@ int pipe_write(void* pipecb_t, const char *buf, unsigned int n){
 
     // check if there is available space
     int availableSpace = PIPE_BUFFER_SIZE - pipe_to_write_to->written_bytes;
-    while(availableSpace == 0){
-        kernel_broadcast(&pipe_to_write_to->has_data);          // signal the waiting readers to consume some data and free up space
+    while(availableSpace == 0 && pipe_to_write_to->reader != NULL){
+        //kernel_broadcast(&pipe_to_write_to->has_data);          // signal the waiting readers to consume some data and free up space
         kernel_wait(&pipe_to_write_to->has_space, SCHED_PIPE);   // wait till there is some free space
     }
 
@@ -177,6 +177,9 @@ int pipe_write(void* pipecb_t, const char *buf, unsigned int n){
 
     // write
     for(int i=0; i<bytes_to_write; i++){
+		if(pipe_to_write_to->w_position->c != '\0'){	// avoid overwritting non-null characters
+			return -1;
+		}
         pipe_to_write_to->w_position->c = buf[i];   // write
         pipe_to_write_to->w_position = pipe_to_write_to->w_position->next; // move cursor
         pipe_to_write_to->written_bytes++;          // increment written bytes
@@ -201,7 +204,7 @@ int pipe_read(void* pipecb_t, char *buf, unsigned int n){
     pipe_cb* pipe_to_read_from = (pipe_cb*) pipecb_t; 
 
     // check if pipe and reader exist and are open
-    if(pipe_to_read_from == NULL ||pipe_to_read_from->reader == NULL){
+    if(pipe_to_read_from == NULL || pipe_to_read_from->reader == NULL){
         return -1;
     }
 
@@ -211,8 +214,8 @@ int pipe_read(void* pipecb_t, char *buf, unsigned int n){
     }
 
     // check if there are available data to read
-    while(pipe_to_read_from->written_bytes == 0){
-        kernel_broadcast(&pipe_to_read_from->has_space);        // wake up the blocked writers to create some data
+    while(pipe_to_read_from->written_bytes == 0 && pipe_to_read_from->writer != NULL){
+        //kernel_broadcast(&pipe_to_read_from->has_space);        // wake up the blocked writers to create some data
         kernel_wait(&pipe_to_read_from->has_data, SCHED_PIPE);  // wait till there are some data 
     }
 
@@ -227,6 +230,7 @@ int pipe_read(void* pipecb_t, char *buf, unsigned int n){
     // read
     for(int i=0; i<bytes_to_read; i++){
         buf[i] = pipe_to_read_from->r_position->c;      // read
+		pipe_to_read_from->r_position->c = '\0';
         pipe_to_read_from->r_position = pipe_to_read_from->r_position->next;    // move cursor
         pipe_to_read_from->written_bytes--;             // decrement write counter
     }
@@ -251,18 +255,43 @@ int pipe_writer_close(void* _pipecb){
 
     pipe_cb *pipe_to_close = (pipe_cb*) _pipecb;
     
-    // check if the pipe exists
-    if(pipe_to_close == NULL){
+    // check if the pipe and the writer exist
+    if(pipe_to_close == NULL || pipe_to_close->writer == NULL){
         return -1;
     }
 
-    // deallocate the writer FCB
-
-
+    pipe_to_close->writer = NULL;           // free would deallocate the FCB's memory, so we just set the pointer to null
+    
+    if (pipe_to_close->reader == NULL){     // if reader is closed too, deallocate the buffer and the pipe itself
+        free(pipe_to_close->BUFFER);        // has to be done with a dedicated free_list func TODO
+        free(pipe_to_close);
+    }
+    else{
+    	kernel_broadcast(&pipe_to_close->hasData); // else broadcast to hasData (so any waiting readers wake up and finish reading the data)
+    }
+    return 0; 
 
 }
 int pipe_reader_close(void* _pipecb){
+    
+    pipe_cb *pipe_to_close = (pipe_cb*) _pipecb;
+    
+    // check if the pipe and the reader exist
+    if(pipe_to_close == NULL || pipe_to_close->reader == NULL){
+        return -1;
+    }
 
+    pipe_to_close->reader = NULL;           // free would deallocate the FCB's memory, so we just set the pointer to null
+    
+    if (pipe_to_close->writer == NULL){     // if writer is closed too, deallocate the buffer and the pipe itself
+        free(pipe_to_close->BUFFER);        // has to be done with a dedicated free_list func TODO
+        free(pipe_to_close);
+    }
+    else{
+    	kernel_broadcast(&pipe_to_close->has_space); // else broadcast to hasSpace (so any waiting writers wake up and exit too)
+    }
+
+    return 0;
 }
 
 
