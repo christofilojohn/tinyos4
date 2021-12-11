@@ -10,3 +10,5 @@ validate_api
 test_example
 doc/
 .vscode/
+kbd*
+con*
