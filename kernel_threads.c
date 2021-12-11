@@ -2,6 +2,7 @@
 #include "kernel_sched.h"
 #include "kernel_proc.h"
 #include "kernel_cc.h"
+#include "kernel_streams.h"
 
 /**
  * @brief 
@@ -109,7 +110,6 @@ int sys_ThreadJoin(Tid_t tid, int* exitval)
 
   // find the thread with the given tid, return NULL if unsuccessful
   PCB* curproc = CURPROC;  
-  TCB* curthread  = cur_thread();
   rlnode* tmp = rlist_find(&curproc->ptcb_list, (PTCB*)tid, NULL);   // could also be a check like tid->owner_pcb!=CURPROC and probably should be, since we do not know for sure that tid is the PTCB's "key" that rlist_find uses to search
   
   // if the search was unsuccessful, exit

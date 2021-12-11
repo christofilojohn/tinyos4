@@ -594,8 +594,6 @@ static void idle_thread()
  */
 void initialize_scheduler()
 {
-	//rlnode_init(&SCHED, NULL); old implementation
-	int i=0;
 	// for each priority que, initialize
 	for(int temp=0; temp < PRIORITY_QUEUES; temp++){
 		rlnode_init(&SCHED[temp], NULL);
