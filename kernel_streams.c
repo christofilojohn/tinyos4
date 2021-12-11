@@ -5,6 +5,7 @@
 #include "kernel_streams.h"
 #include "kernel_sched.h"
 #include "kernel_proc.h"
+#include "kernel_streams.h"
 
 #define MAX_FILES MAX_PROC
 
@@ -178,14 +179,13 @@ int sys_Write(Fid_t fd, const char *buf, unsigned int size)
     /* make sure that the stream will not be closed (by another thread) 
        while we are using it! */
     FCB_incref(fcb);
-  
+
 
     if(devwrite)
       retcode = devwrite(sobj, buf, size);
 
     /* Need to decrease the reference to FCB */
     FCB_decref(fcb);
-
   }
 
 
