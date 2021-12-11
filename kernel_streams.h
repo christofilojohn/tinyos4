@@ -1,9 +1,8 @@
 #ifndef __KERNEL_STREAMS_H
 #define __KERNEL_STREAMS_H
-
 #include "tinyos.h"
 #include "kernel_dev.h"
-#define PIPE_BUFFER_SIZE 8192		// between 4 and 16 kB, according to Pipe() syscall's documentation */
+#define PIPE_BUFFER_SIZE 32768		// between 4 and 16 kB, according to Pipe() syscall's documentation */
 
 /**
     Node of a doubly linked character list.
@@ -13,7 +12,6 @@ typedef struct char_list_node {
     struct char_list_node *next;
     char c;
 } c_node;
-c_node* init_list(int size, const char *data);
 
 typedef struct pipe_control_block {
 	FCB *reader, *writer;
@@ -24,25 +22,115 @@ typedef struct pipe_control_block {
 	int written_bytes;	/* need to create mutex ?*/
 } pipe_cb;
 
-static file_ops reader_file_ops = {
-	.Read = pipe_read,
-	.Write = no_op_func,
-	.Close = pipe_reader_close
-};
+/**
+ * @brief Initialize the pipe object (the pipe_cb)
+ * 
+ * Read and write positions are set to the head of the
+ * buffer, written_bytes is set to 0, and buffer is 
+ * set to "\0\0\0\0\0\0\0\0\0...""
+ * 
+ * @return pipe_cb* The newly created pipe
+ */
+pipe_cb* init_pipe_obj();
 
-static file_ops writer_file_ops = {
-	.Read = no_op_func,
-	.Write = pipe_write,
-	.Close = pipe_writer_close
-};
+/**
+ * @brief Get the empty node of the list. If there is none, returns NULL.
+ * 
+ * @param list      The list to check
+ * @return c_node*  The empty node if found, NULL otherwise
+ */
+c_node* get_empty_node(c_node* list);
+
+/**
+    Function to allocate and initialize a doubly linked circular list of
+    characters, given a size and a char* (a string). If the string is
+    NULL, all chars in the list will be spaces (' ').
+
+    Returns the head of the newly created list.
+
+    Remember to free() the list when done.
+*/
+c_node* init_list(int size, const char *data);
 
 
+/**
+	@brief Construct and return a pipe.
+
+	A pipe is a one-directional buffer accessed via two file ids,
+	one for each end of the buffer. The size of the buffer is 
+	implementation-specific, but can be assumed to be between 4 and 16 
+	kbytes. 
+
+	Once a pipe is constructed, it remains operational as long as both
+	ends are open. If the read end is closed, the write end becomes 
+	unusable: calls on @c Write to it return error. On the other hand,
+	if the write end is closed, the read end continues to operate until
+	the buffer is empty, at which point calls to @c Read return 0.
+
+	@param pipe a pointer to a pipe_t structure for storing the file ids.
+	@returns 0 on success, or -1 on error. Possible reasons for error:
+		- the available file ids for the process are exhausted.
+*/
 int sys_Pipe(pipe_t* pipe);
+
+/**
+ * @brief Write up to n bytes off buf to pipecb_t.
+ * 
+ * @param pipecb_t  The pipe to write to.
+ * @param buf       The data to be written.
+ * @param n         The max amount of bytes to be written.
+ * @return int      The amount of bytes written.
+ */
 int pipe_write(void* pipecb_t, const char *buf, unsigned int n);
+
+/**
+ * @brief Transfer up to n bytes from a pipe to buf
+ * 
+ * @param pipecb_t  The pipe to read from. 
+ * @param buf       The buffer to save the data in.
+ * @param n         The max amount of bytes to read.
+ * @return int      The amount of bytes read. 0 if write end closed and no data in pipe. -1 if pipe or reader NULL
+ */
 int pipe_read(void* pipecb_t, char *buf, unsigned int n);
+
+/** @brief Close operation.
+
+      Close the stream object, deallocating any resources held by it.
+      This function returns 0 is it was successful and -1 if not.
+      Although the value in case of failure is passed to the calling process,
+      the stream should still be destroyed.
+
+    Possible errors are:
+    - There was a I/O runtime problem.
+*/
 int pipe_writer_close(void* _pipecb);
+
+/** @brief Close operation.
+
+      Close the stream object, deallocating any resources held by it.
+      This function returns 0 is it was successful and -1 if not.
+      Although the value in case of failure is passed to the calling process,
+      the stream should still be destroyed.
+
+    Possible errors are:
+    - There was a I/O runtime problem.
+*/
 int pipe_reader_close(void* _pipecb);
-int no_op_func();
+
+/**
+ * No-op function to have as read() in the writer.
+ */
+int no_op_read(void* pipecb_t, char *buf, unsigned int n);
+
+/**
+ * No-op function to have as write() in the reader.
+ */
+int no_op_write(void* pipecb_t, const char *buf, unsigned int n);
+
+
+
+
+
 
 /**
 	@file kernel_streams.h
