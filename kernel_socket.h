@@ -4,6 +4,7 @@
 #include "util.h"
 #include "kernel_dev.h"
 
+
 /**
  * Possible socket states. 
 */
@@ -13,6 +14,7 @@ typedef enum SOCKET_TYPE {
     SOCKET_PEER         /** A peer socket connected with another one. */
 } socket_type;
 
+
 /**
  * Listener socket (waiting for inbound connections)
 */
@@ -21,6 +23,7 @@ typedef struct listener_socket{
     CondVar req_available;  /** The conditional variable that incoming requests will signal to wake the listener up */
 } listener_socket;
 
+
 /**
  * Unbound socket (not a listener or a peer yet)
 */
@@ -28,14 +31,16 @@ typedef struct unbound_socket{
     rlnode socket_node;     /** The node through which the socket will be attached to queues */
 } unbound_socket;
 
+
 /**
  * Peer socket (connected with another one and able to "talk")
 */
 typedef struct peer_socket{
-    socket_cb* peer;        /** The socket this one is connected to */
+    struct peer_socket* peer;        /** The socket this one is connected to */
     pipe_cb* write_pipe;    /** The pipe to which this socket writes */
     pipe_cb* read_pipe;     /** The pipe from which this socket reads */
 } peer_socket;
+
 
 /**
  * @brief The socket control block
@@ -48,13 +53,14 @@ typedef struct socket_control_block {
     uint refcount;          /** The counter of references to this socket. When 0, we can safely delete it. */
     FCB* fcb;               /** The FCB through which this socket is accessible (its file descriptor) for backwards connectivity. Can be used as socket state indicator (when NULL, the sockets is closed) */
     socket_type type;       /** The type of this socket. The type of the socket matches the union member with the rest of the data */
-
+	port_t port;			/** The port that the socket is bound to */
     union {
         listener_socket listener_s;     /** The listener socket object */
         unbound_socket unbound_s;       /** The unbound socket object. This could be ommited but is here for the sake of uniformity*/
         peer_socket peer_s;             /** The peer socket object */
-    }
-};
+    };
+} socket_cb;
+
 
 /**
  * @brief The connection request object.
@@ -71,6 +77,47 @@ typedef struct connection_request {
     CondVar connected_cv;   /** The conditional variable on which the connecting socket sleeps until the request is served or the timeout time has passed. */
     rlnode queue_node;      /** The node through which the request is attached to the listeners request queue */
 } connection_request;
+
+
+/**
+ * Allocate and initialize the fields of a socket. Returns the newly created socket.
+*/
+socket_cb* init_socket_cb(FCB* parent_fcb);
+
+
+/**
+ * @brief Write up to n bytes off buf to pipecb_t.
+ * 
+ * @param pipecb_t  The pipe to write to.
+ * @param buf       The data to be written.
+ * @param n         The max amount of bytes to be written.
+ * @return int      The amount of bytes written.
+ */
+int socket_write(void* socket, const char *buf, unsigned int n);
+
+
+/**
+ * @brief Transfer up to n bytes from a pipe to buf
+ * 
+ * @param pipecb_t  The pipe to read from. 
+ * @param buf       The buffer to save the data in.
+ * @param n         The max amount of bytes to read.
+ * @return int      The amount of bytes read. 0 if write end closed and no data in pipe. -1 if pipe or reader NULL
+ */
+int socket_read(void* socket, char *buf, unsigned int n);
+
+
+/** @brief Close operation.
+
+      Close the stream object, deallocating any resources held by it.
+      This function returns 0 is it was successful and -1 if not.
+      Although the value in case of failure is passed to the calling process,
+      the stream should still be destroyed.
+
+    Possible errors are:
+    - There was a I/O runtime problem.
+*/
+int socket_close(void* socket);
 
 
 /**
