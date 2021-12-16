@@ -51,6 +51,7 @@ Fid_t sys_Socket(port_t port)
 	// connect the fcb to the pipe and to the ops
 	fcb->streamobj = socket;
 	fcb->streamfunc = &socket_file_ops;
+	socket->port = port;
 
 	return fid;
 }
@@ -178,7 +179,7 @@ Fid_t sys_Accept(Fid_t lsock)
 	// in the end decrease refcount (TODO check if necessary)
 	listener->refcount--;
 
-	return NOFILE;
+	return peer_fid;
 }
 
 int sys_Connect(Fid_t sock, port_t port, timeout_t timeout)
