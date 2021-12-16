@@ -986,7 +986,7 @@ BOOT_TEST(test_threadself,
 
 BOOT_TEST(test_join_illegal_tid_gives_error,
 	"Test that ThreadJoin rejects an illegal Tid")
-{	
+{
 	int* illegal_ptr = (int*) -1;
 
 	ASSERT(ThreadJoin(NOTHREAD, illegal_ptr)==-1);
@@ -1205,8 +1205,6 @@ BOOT_TEST(test_detach_main_thread,
 {
 	ASSERT(run_get_status(detach_main_thread, 0, NULL) == 42);
 	return 0;
-
-	
 }
 
 
@@ -1674,10 +1672,16 @@ void connect_sockets(Fid_t sock1, Fid_t lsock, Fid_t* sock2, port_t port)
 		.sock1=sock1, .lsock=lsock, .sock2=sock2, .port=port
 	};
 
-	ASSERT(run_get_status(connect_sockets_connect_process, sizeof(A), &A)==0);
+	/* Spawn a child to connect sock1 to port (where lsock must be listening) */
+	Pid_t pid = Exec(connect_sockets_connect_process, sizeof(A), &A);
+	ASSERT(pid != NOPROC);
 
+	/* accept the child's connection here */
 	*sock2 = Accept(lsock);
 	ASSERT(*sock2 != NOFILE);
+
+	/* Clean up child */
+	ASSERT(WaitChild(pid, NULL)==pid);
 }
 
 
@@ -2593,6 +2597,5 @@ int main(int argc, char** argv)
 	register_test(&user_tests);
 	return run_program(argc, argv, &all_tests);
 }
-
 
 
