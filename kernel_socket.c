@@ -64,6 +64,7 @@ int sys_Listen(Fid_t sock)
 
 	// check if given fid is legal and corresponding FCB is NULL
 	if(sock < 0 || sock > MAX_FILEID-1 || get_fcb(sock)==NULL){
+		//fprintf(stderr, "Sock invalid or getfcb null\n");
 		return -1;
 	}
 
@@ -72,16 +73,19 @@ int sys_Listen(Fid_t sock)
 
 	// check if the socket is NULL or its port is NOPORT
 	if(listener_sock==NULL || listener_sock->port==NOPORT){
+		//fprintf(stderr, "%s\n", listener_sock==NULL ? "Listener sock null" : "listener port noport\n");
 		return -1;
 	}
 
 	// check if port is occupied by another listener
 	if(PORT_MAP[listener_sock->port] != NULL){
+		//fprintf(stderr, "port map [sock] occupied\n");
 		return -1;
 	}
 
 	// check if socket is already initialized
 	if(listener_sock->type != SOCKET_UNBOUND){
+		//fprintf(stderr, "Socket type not unbound\n");
 		return -1;
 	}
 
@@ -109,6 +113,7 @@ Fid_t sys_Accept(Fid_t lsock)
 
 	// check if given fid is legal and corresponding FCB is NULL
 	if(lsock < 0 || lsock > MAX_FILEID-1 || get_fcb(lsock)==NULL){
+		//fprintf(stderr, "Accept failed because of illegal sock\n");
 		return -1;
 	}	
 	
@@ -117,6 +122,7 @@ Fid_t sys_Accept(Fid_t lsock)
 
 	// check if the file id is not initialized by Listen() 
 	if(listener==NULL || listener->type!=SOCKET_LISTENER){
+		//fprintf(stderr, "Accept failed because of null or problematic listener\n");
 		return -1;
 	}
 
@@ -126,14 +132,17 @@ Fid_t sys_Accept(Fid_t lsock)
 	listener->refcount++;
 
 	// wait for a request
+	//fprintf(stderr, "Accept sleeping on 0x%X\n", & listener->listener_s.req_available);
 	while(is_rlist_empty(&listener->listener_s.queue)){
 		kernel_wait(& listener->listener_s.req_available, SCHED_USER);	// waiting cause is sched user because the user requested it.
 	}
+	//fprintf(stderr, "Accept woke up from 0x%X\n", & listener->listener_s.req_available);
 
 	// wake up when a request is found
 
 	// check if the port is still valid and correctly installed in the port map (the socket may have been closed while we were sleeping)
 	if(listener==NULL || listener->type!=SOCKET_LISTENER || PORT_MAP[listener->port]!=listener){
+		//fprintf(stderr, "Accept failed because of null or problematic listener after waking up\n");
 		return -1;
 	}
 
@@ -146,6 +155,7 @@ Fid_t sys_Accept(Fid_t lsock)
 
 	if(peer_fid==-1 || get_fcb(peer_fid)==NULL){
 		// TODO should we put the request back in the waiting queue here?
+		//fprintf(stderr, "ABORT ABORT\n");
 		return -1;
 	}
 
@@ -174,11 +184,13 @@ Fid_t sys_Accept(Fid_t lsock)
 	req__socket->peer_s.write_pipe = pipe1;
 
 	// signal the Connect side
+	//fprintf(stderr, "accept signaling 0x%X and request->admitted=%d\n", & request->connected_cv, request->admitted);
 	kernel_signal(& request->connected_cv);
 
 	// in the end decrease refcount (TODO check if necessary)
 	listener->refcount--;
 
+	//fprintf(stderr, "Accept exiting successfully and returning %d\n", peer_fid);
 	return peer_fid;
 }
 
@@ -194,17 +206,20 @@ int sys_Connect(Fid_t sock, port_t port, timeout_t timeout)
 
 	// check if given fid is legal and corresponding FCB is NULL
 	if(sock < 0 || sock > MAX_FILEID-1 || get_fcb(sock)==NULL){
+		fprintf(stderr, "illegal sock or fcb null\n");	
 		return -1;
 	}
 	socket_cb *cursoc = (socket_cb*) get_fcb(sock)->streamobj;	// the socket that makes the request
 
 	// check if the given port is illegal
 	if(port <= NOPORT || port > MAX_PORT-1){
+		fprintf(stderr, "illegal port %d\n", port);	
 		return -1;
 	}
 
 	// check if the port does not havea (listening) socket bound to it
 	if(PORT_MAP[port]==NULL || PORT_MAP[port]->type!=SOCKET_LISTENER){
+		fprintf(stderr, "%s\n", PORT_MAP[port]->type!=SOCKET_LISTENER ? "PORT_MAP[port]->type!=SOCKET_LISTENER" : "PORT_MAP[port]==NULL");
 		return -1;
 	}
 
@@ -224,7 +239,8 @@ int sys_Connect(Fid_t sock, port_t port, timeout_t timeout)
 	// add request to the listeners queue and signal listener
 	rlist_push_back(& socket_to_connect_to->listener_s.queue, & request->queue_node);
 	kernel_signal(& socket_to_connect_to->listener_s.req_available);
-
+	//fprintf(stderr, "request signaled 0x%X\n", & socket_to_connect_to->listener_s.req_available);
+	//fprintf(stderr, "request gonna wait on 0x%X\n", &request->connected_cv);
 	// block for the specified amount of time
 	kernel_timedwait(& request->connected_cv, SCHED_USER, timeout);
 
@@ -232,7 +248,7 @@ int sys_Connect(Fid_t sock, port_t port, timeout_t timeout)
 	socket_to_connect_to->refcount--;
 
 	// TODO free the request (?)
-
+	//fprintf(stderr, "request woke up from 0x%X and request->admited=%d\n", &request->connected_cv, request->admitted);
 	return (request->admitted==1) ? 0 : -1;			// if the request was admitted return 0, else -1
 }
 
