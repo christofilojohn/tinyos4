@@ -278,20 +278,19 @@ int sys_ShutDown(Fid_t sock, shutdown_mode how)
 		case SHUTDOWN_READ:
 			// close socket's reader pipe
 			pipe_reader_close(socket_to_close->peer_s.read_pipe);
-			socket_to_close->peer_s.read_pipe = NULL;
+			// socket_to_close->peer_s.read_pipe = NULL;
 			break;
 		case SHUTDOWN_WRITE:
 			// close socket's writer_pipe
 			pipe_writer_close(socket_to_close->peer_s.write_pipe);
-			socket_to_close->peer_s.write_pipe = NULL;
+			//socket_to_close->peer_s.write_pipe = NULL;
 			break;
 		case SHUTDOWN_BOTH:
 			// close both the reader and the writer pipes
 			pipe_writer_close(socket_to_close->peer_s.write_pipe);
 			pipe_reader_close(socket_to_close->peer_s.read_pipe);
-			socket_to_close->peer_s.read_pipe = NULL;
-			socket_to_close->peer_s.write_pipe = NULL;
-			break;
+			//socket_to_close->peer_s.read_pipe = NULL;
+			//socket_to_close->peer_s.write_pipe = NULL;
 			break;
 		default:
 			return -1;	
